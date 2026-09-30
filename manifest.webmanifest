@@ -1,0 +1,9 @@
+{
+  "name":"AI Studio",
+  "short_name":"AI Studio",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#0d0f12",
+  "theme_color":"#101114",
+  "icons":[]
+}

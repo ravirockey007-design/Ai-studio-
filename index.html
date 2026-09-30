@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<link rel="manifest" href="manifest.webmanifest">
+<title>AI Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0d0f12;color:#f5f5f5;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{position:sticky;top:0;background:#111318ee;backdrop-filter:blur(12px);padding:14px 16px;border-bottom:1px solid #292d35;z-index:5}
+h1{font-size:20px;margin:0}.sub{font-size:12px;color:#9aa0aa}
+nav{display:flex;gap:8px;padding:10px 12px;background:#15171c;border-bottom:1px solid #292d35}
+nav button{flex:1;border:0;background:#20232a;color:#bbb;padding:11px;border-radius:10px;font-weight:700}nav button.active{background:#fff;color:#111}
+main{max-width:900px;margin:auto;padding:14px 14px 90px}.panel{display:none}.panel.active{display:block}
+.card{background:#17191f;border:1px solid #292d35;border-radius:16px;padding:14px;margin-bottom:14px}
+textarea,input,select{width:100%;background:#0d0f12;color:#fff;border:1px solid #363a44;border-radius:11px;padding:12px;font-size:15px}
+textarea{min-height:110px;resize:vertical}button.action{border:0;border-radius:11px;background:#fff;color:#111;padding:12px 16px;font-weight:800;margin-top:10px}
+button.secondary{border:1px solid #383c46;border-radius:11px;background:#20232a;color:#fff;padding:10px 14px;margin-top:10px}
+#chat{min-height:300px;max-height:55vh;overflow:auto}.msg{padding:11px;border-radius:12px;margin:9px 0;white-space:pre-wrap}.me{background:#252933}.ai{background:#101216;border:1px solid #292d35}
+img.generated{width:100%;border-radius:14px;margin-top:12px}.muted{color:#969ca7;font-size:13px}.row{display:flex;gap:8px}.row>*{flex:1}
+a{color:#fff}.danger{color:#ff9d9d}.small{font-size:12px}
+</style>
+</head>
+<body>
+<header><h1>AI Studio</h1><div class="sub">Android-friendly AI chat + image generation</div></header>
+<nav>
+<button class="tab active" data-tab="chat">Chat</button>
+<button class="tab" data-tab="image">Images</button>
+<button class="tab" data-tab="settings">Settings</button>
+</nav>
+<main>
+<section id="chat" class="panel active">
+<div class="card"><div id="messages"></div></div>
+<div class="card">
+<textarea id="chatInput" placeholder="Message your AI..."></textarea>
+<button class="action" id="send">Send</button>
+</div>
+</section>
+
+<section id="image" class="panel">
+<div class="card">
+<h3>Image generator</h3>
+<textarea id="prompt" placeholder="Describe the image..."></textarea>
+<textarea id="negative" placeholder="Negative prompt (optional)" style="margin-top:9px"></textarea>
+<div class="row"><select id="model"><option value="flux">Flux</option><option value="turbo">Turbo</option></select><input id="seed" type="number" placeholder="Seed (optional)"></div>
+<button class="action" id="generate">Generate</button>
+<div id="imageStatus" class="muted" style="margin-top:8px"></div>
+<div id="imageResult"></div>
+</div>
+<div class="card muted">Generation is provided by the service configured in Settings. Availability, quotas and content rules are controlled by that provider.</div>
+</section>
+
+<section id="settings" class="panel">
+<div class="card">
+<h3>Connection</h3>
+<p class="muted">This version uses Pollinations' current API. Create your own key and keep it private. The key is stored only in this browser's local storage.</p>
+<input id="apiKey" type="password" placeholder="Paste your Pollinations API key">
+<button class="action" id="save">Save key</button>
+<p id="saveStatus" class="muted"></p>
+</div>
+<div class="card">
+<h3>Install on Android</h3>
+<p class="muted">Open this site in Chrome, then use ⋮ → Add to Home screen / Install app.</p>
+<p class="small">For a truly unlimited setup, the model must run on hardware you control. Cloud services can have limits or charges.</p>
+</div>
+<div class="card">
+<h3>Privacy</h3>
+<button class="secondary" id="clear">Clear saved key and chat</button>
+</div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const key=()=>localStorage.getItem("pollinations_key")||"";
+$("apiKey").value=key();
+
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+ document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));$(b.dataset.tab).classList.add("active");
+});
+
+function add(role,text){
+ const d=document.createElement("div");d.className="msg "+(role==="You"?"me":"ai");d.textContent=role+": "+text;$("messages").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight;
+}
+$("send").onclick=async()=>{
+ const q=$("chatInput").value.trim(); if(!q)return;
+ add("You",q);$("chatInput").value="";
+ const k=key(); if(!k){add("AI","Add your Pollinations API key in Settings first.");return}
+ add("AI","Thinking...");
+ const nodes=[...$("messages").querySelectorAll(".ai")];const last=nodes[nodes.length-1];
+ try{
+  const r=await fetch("https://gen.pollinations.ai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+k},body:JSON.stringify({model:"openai/gpt-5.4-nano",messages:[{role:"user",content:q}]})});
+  const d=await r.json();last.textContent="AI: "+(d.choices?.[0]?.message?.content||d.error?.message||"Request failed");
+ }catch(e){last.textContent="AI: Connection error. Check your key and internet connection."}
+};
+$("generate").onclick=async()=>{
+ const p=$("prompt").value.trim();if(!p)return;
+ const k=key();if(!k){$("imageStatus").textContent="Add your API key in Settings first.";return}
+ $("imageStatus").textContent="Generating…";$("imageResult").innerHTML="";
+ let url="https://gen.pollinations.ai/image/"+encodeURIComponent(p)+"?model="+encodeURIComponent($("model").value)+"&key="+encodeURIComponent(k);
+ if($("negative").value.trim())url+="&negative_prompt="+encodeURIComponent($("negative").value.trim());
+ if($("seed").value.trim())url+="&seed="+encodeURIComponent($("seed").value.trim());
+ const img=new Image();img.className="generated";img.alt="Generated image";img.onload=()=>{$("imageStatus").textContent="Done";$("imageResult").appendChild(img)};img.onerror=()=>{$("imageStatus").textContent="Generation failed or the provider rejected the request."};img.src=url;
+};
+$("save").onclick=()=>{localStorage.setItem("pollinations_key",$("apiKey").value.trim());$("saveStatus").textContent="Saved on this device."};
+$("clear").onclick=()=>{localStorage.removeItem("pollinations_key");localStorage.removeItem("chat");$("apiKey").value="";$("messages").innerHTML="";$("saveStatus").textContent="Cleared."};
+</script>
+</body>
+</html>
